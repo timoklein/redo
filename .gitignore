@@ -1,0 +1,23 @@
+# Experiment tracking
+wandb/
+log/
+runs/
+
+# Byte-compiled / optimized / DLL files 
+__pycache__/ 
+*.py[cod]
+*.pyc
+
+# package 
+eggs/ 
+develop-eggs/ 
+*.egg-info/ 
+*.egg  
+
+# editor
+.idea/
+.vscode/
+.ipynb_checkpoints/
+
+# large files
+data/
