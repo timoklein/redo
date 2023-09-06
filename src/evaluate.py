@@ -1,3 +1,7 @@
+"""
+Taken from cleanRL: https://github.com/vwxyzjn/cleanrl/blob/master/cleanrl_utils/evals/dqn_eval.py.
+"""
+
 import random
 from typing import Callable
 

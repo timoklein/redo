@@ -1,3 +1,8 @@
+""" 
+The wrappers are taken from stable-baselines3 with unnecessary ones removed.
+https://github.com/DLR-RM/stable-baselines3/blob/feat/gymnasium-support/stable_baselines3/common/type_aliases.py
+"""
+
 from typing import Any, SupportsFloat, Union
 
 import gymnasium as gym
@@ -6,12 +11,6 @@ import numpy as np
 GymObs = Union[tuple, dict[str, Any], np.ndarray, int]
 GymStepReturn = tuple[GymObs, float, bool, dict]
 
-
-""" 
-The wrappers are taken from stable-baselines3 with unnecessary ones removed.
-https://github.com/DLR-RM/stable-baselines3/blob/feat/gymnasium-support/stable_baselines3/common/type_aliases.py
-
-"""
 
 AtariResetReturn = tuple[np.ndarray, dict[str, Any]]
 AtariStepReturn = tuple[np.ndarray, SupportsFloat, bool, bool, dict[str, Any]]
@@ -64,7 +63,7 @@ class NoopResetEnv(gym.Wrapper[np.ndarray, int, np.ndarray, int]):
             noops = self.unwrapped.np_random.integers(1, self.noop_max + 1)
         assert noops > 0
         obs = np.zeros(0)
-        info: Dict = {}
+        info: dict = {}
         for _ in range(noops):
             obs, _, terminated, truncated, info = self.env.step(self.noop_action)
             if terminated or truncated:

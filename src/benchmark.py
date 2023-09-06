@@ -1,3 +1,8 @@
+"""
+Simplified version of cleanRL's benchmarking script.
+The original version can be found here: https://github.com/vwxyzjn/cleanrl/blob/master/cleanrl_utils/benchmark.py
+"""
+
 import argparse
 import shlex
 import subprocess

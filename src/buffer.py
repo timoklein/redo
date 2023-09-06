@@ -1,3 +1,10 @@
+""" 
+This is a simplified version of the stable-baselines3 replay buffer taken from
+https://github.com/DLR-RM/stable-baselines3/blob/master/stable_baselines3/common/buffers.py
+
+I've removed unneeded functionality and put all dependencies into a single file.
+"""
+
 import warnings
 from abc import ABC, abstractmethod
 from typing import Any, Dict, NamedTuple, Union
@@ -6,13 +13,6 @@ import numpy as np
 import psutil
 import torch
 from gymnasium import spaces
-
-""" 
-This is a simplified version of the stable-baselines3 replay buffer taken from
-https://github.com/DLR-RM/stable-baselines3/blob/master/stable_baselines3/common/buffers.py
-
-I've removed unneeded functionality and put all dependencies into a single file.
-"""
 
 
 class ReplayBufferSamples(NamedTuple):
