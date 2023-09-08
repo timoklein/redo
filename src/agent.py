@@ -15,13 +15,13 @@ class QNetwork(nn.Module):
         self.q = nn.Linear(512, int(env.single_action_space.n))
 
     def forward(self, x):
-        x = F.relu(self.conv1(x / 255.0))
-        x = F.relu(self.conv2(x))
-        x = F.relu(self.conv3(x))
-        x = torch.flatten(x, start_dim=1)
-        x = F.relu(self.fc1(x))
-        x = self.q(x)
-        return x
+        x1 = F.relu(self.conv1(x / 255.0))
+        x2 = F.relu(self.conv2(x1))
+        x3 = F.relu(self.conv3(x2))
+        x3 = torch.flatten(x3, start_dim=1)
+        x4 = F.relu(self.fc1(x3))
+        q_vals = self.q(x4)
+        return q_vals, (x1, x2, x3, x4)
 
 
 def linear_schedule(start_e: float, end_e: float, duration: float, t: int):

@@ -31,14 +31,16 @@ def dqn_loss(
     """Compute the double DQN loss."""
     with torch.no_grad():
         # Get value estimates from the target network
-        target_vals = target_network.forward(next_obs)
+        target_vals, _ = target_network(next_obs)
         # Select actions through the policy network
-        policy_actions = q_network(next_obs).argmax(dim=1)
+        action_vals, _ = q_network(next_obs)
+        policy_actions = torch.argmax(action_vals, dim=1)
         target_max = target_vals[range(len(target_vals)), policy_actions]
         # Calculate Q-target
         td_target = rewards.flatten() + gamma * target_max * (1 - dones.flatten())
 
-    old_val = q_network(obs).gather(1, actions).squeeze()
+    old_vals, _ = q_network(obs)
+    old_val = old_vals.gather(1, actions).squeeze()
     return F.mse_loss(td_target, old_val), old_val
 
 
@@ -101,7 +103,7 @@ def main(cfg: Config) -> None:
         if random.random() < epsilon:
             actions = np.array([envs.single_action_space.sample() for _ in range(envs.num_envs)])
         else:
-            q_values = q_network(torch.Tensor(obs).to(device))
+            q_values, _ = q_network(torch.Tensor(obs).to(device))
             actions = torch.argmax(q_values, dim=1).cpu().numpy()
 
         # TRY NOT TO MODIFY: execute the game and log data.
@@ -159,8 +161,11 @@ def main(cfg: Config) -> None:
                     "charts/SPS": int(global_step / (time.time() - start_time)),
                 }
 
-                redo_samples = rb.sample(cfg.redo_bs)
                 if global_step % cfg.redo_check_interval == 0 and global_step > cfg.learning_starts:
+                    redo_samples = rb.sample(cfg.redo_bs)
+                    with torch.inference_mode():
+                        _, activations = q_network(redo_samples.observations)
+                        import ipdb; ipdb.set_trace(context=21)
                     q_network, optimizer, dormant_fraction, dormant_count = run_redo(
                         redo_samples,
                         model=q_network,
