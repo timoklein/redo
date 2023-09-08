@@ -9,8 +9,8 @@ import pyrallis
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
-
 import wandb
+
 from src.agent import QNetwork, linear_schedule
 from src.buffer import ReplayBuffer
 from src.config import Config
@@ -169,7 +169,6 @@ def main(cfg: Config) -> None:
                         re_initialize=cfg.enable_redo,
                         use_lecun_init=cfg.use_lecun_init,
                     )
-                    print(f"Dormant fraction: {dormant_fraction}. Dormant count: {dormant_count}.")
                     logs |= {
                         "regularization/dormant_fraction": dormant_fraction,
                         "regularization/dormant_count": dormant_count,

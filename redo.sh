@@ -2,6 +2,6 @@
 
 OMP_NUM_THREADS=1 python -m src.benchmark \
     --env-ids DemonAttack-v4 \
-    --command "python redo_dqn.py --track True --enable_redo False" \
+    --command "python redo_dqn.py --track True --enable_redo True" \
     --num-seeds 4 \
     --workers 2
