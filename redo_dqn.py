@@ -9,13 +9,13 @@ import pyrallis
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
-import wandb
 
+import wandb
 from src.agent import QNetwork, linear_schedule
 from src.buffer import ReplayBuffer
 from src.config import Config
 from src.redo import run_redo
-from src.utils import make_env, set_cuda_configuration
+from src.utils import lecun_normal_initializer, make_env, set_cuda_configuration
 
 
 def dqn_loss(
@@ -76,6 +76,9 @@ def main(cfg: Config) -> None:
     assert isinstance(envs.single_action_space, gym.spaces.Discrete), "only discrete action space is supported"
 
     q_network = QNetwork(envs).to(device)
+    if cfg.use_lecun_init:
+        # Use the same initialization scheme as jax/flax
+        q_network.apply(lecun_normal_initializer)
     optimizer = optim.Adam(q_network.parameters(), lr=cfg.learning_rate, eps=cfg.adam_eps)
     target_network = QNetwork(envs).to(device)
     target_network.load_state_dict(q_network.state_dict())
@@ -150,25 +153,32 @@ def main(cfg: Config) -> None:
                 loss.backward()
                 optimizer.step()
 
+                logs = {
+                    "losses/td_loss": loss,
+                    "losses/q_values": old_val.mean().item(),
+                    "charts/SPS": int(global_step / (time.time() - start_time)),
+                }
+
                 redo_samples = rb.sample(cfg.redo_bs)
-                if cfg.enable_redo and global_step % cfg.redo_check_interval == 0 and global_step > cfg.learning_starts:
-                    q_network, optimizer, dormant_fraction = run_redo(
+                if global_step % cfg.redo_check_interval == 0 and global_step > cfg.learning_starts:
+                    q_network, optimizer, dormant_fraction, dormant_count = run_redo(
                         redo_samples,
                         model=q_network,
                         optimizer=optimizer,
                         tau=cfg.redo_tau,
                         re_initialize=cfg.enable_redo,
+                        use_lecun_init=cfg.use_lecun_init,
                     )
-                    print(f"Redo: dormant fraction: {dormant_fraction:.2f} %")
+                    print(f"Dormant fraction: {dormant_fraction}. Dormant count: {dormant_count}.")
+                    logs |= {
+                        "regularization/dormant_fraction": dormant_fraction,
+                        "regularization/dormant_count": dormant_count,
+                    }
 
                 if global_step % 100 == 0:
                     print("SPS:", int(global_step / (time.time() - start_time)))
                     wandb.log(
-                        {
-                            "losses/td_loss": loss,
-                            "losses/q_values": old_val.mean().item(),
-                            "charts/SPS": int(global_step / (time.time() - start_time)),
-                        },
+                        logs,
                         step=global_step,
                     )
 

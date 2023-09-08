@@ -10,18 +10,38 @@ from .agent import QNetwork
 from .buffer import ReplayBufferSamples
 
 
-def _init_bias_kaiming_uniform(layer: nn.Linear | nn.Conv2d, mask: torch.Tensor) -> None:
+@torch.no_grad()
+def _kaiming_uniform_reinit(layer: nn.Linear | nn.Conv2d, mask: torch.Tensor) -> None:
     """Partially re-initializes the bias of a layer according to the Kaiming uniform scheme."""
-    if isinstance(layer, nn.Conv2d):
-        fan_in, _ = nn.init._calculate_fan_in_and_fan_out(layer.weight)
-        if fan_in != 0:
-            bound = 1 / math.sqrt(fan_in)
+
+    nn.init.kaiming_uniform_(layer.weight.data[mask, ...], a=math.sqrt(5))
+
+    if layer.bias is not None:
+        if isinstance(layer, nn.Conv2d):
+            fan_in, _ = nn.init._calculate_fan_in_and_fan_out(layer.weight)
+            if fan_in != 0:
+                bound = 1 / math.sqrt(fan_in)
+                nn.init.uniform_(layer.bias[mask], -bound, bound)
+        else:
+            fan_in, _ = nn.init._calculate_fan_in_and_fan_out(layer.weight)
+            bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
             nn.init.uniform_(layer.bias[mask], -bound, bound)
-    else:
-        fan_in, _ = nn.init._calculate_fan_in_and_fan_out(layer.weight)
-        bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
-        nn.init.uniform_(layer.bias[mask], -bound, bound)
-    # TODO: Reset grads to None
+
+
+@torch.no_grad()
+def _lecun_normal_reinit(layer: nn.Linear | nn.Conv2d, mask: torch.Tensor) -> None:
+    """Partially re-initializes the bias of a layer according to the Lecun normal scheme."""
+
+    fan_in, _ = nn.init._calculate_fan_in_and_fan_out(layer.weight)
+
+    # This implementation follows the jax one
+    # https://github.com/google/jax/blob/366a16f8ba59fe1ab59acede7efd160174134e01/jax/_src/nn/initializers.py#L260
+    variance = 1.0 / fan_in
+    stddev = math.sqrt(variance) / 0.87962566103423978
+    torch.nn.init.trunc_normal_(layer.weight[mask])
+    layer.weight[mask] *= stddev
+    if layer.bias is not None:
+        torch.nn.init.zeros_(layer.bias[mask])
 
 
 @torch.inference_mode()
@@ -29,6 +49,7 @@ def _get_activation(name: str, activations: dict[str, torch.Tensor]):
     """Fetches and stores the activations of a network layer."""
 
     def hook(layer: nn.Linear | nn.Conv2d, input: tuple[torch.Tensor], output: torch.Tensor) -> None:
+        # Taking the mean here conforms to the expectation under D in the main paper's formula
         if isinstance(layer, nn.Conv2d):
             activations[name] = output.abs().mean(dim=(0, 2, 3))
         else:
@@ -46,20 +67,20 @@ def _get_redo_masks(activations: dict[str, torch.Tensor], tau: float) -> torch.T
     """
     masks = []
     for name, activation in list(activations.items())[:-1]:
-        layer_mask = torch.ones_like(activation, dtype=torch.bool)
+        layer_mask = torch.zeros_like(activation, dtype=torch.bool)
         # Divide by activation mean to make the threshold independent of the layer size
         # see https://github.com/google/dopamine/blob/ce36aab6528b26a699f5f1cefd330fdaf23a5d72/dopamine/labs/redo/weight_recyclers.py#L314
         # https://github.com/google/dopamine/issues/209
         normalized_activation = activation / (activation.mean() + 1e-9)
         if tau > 0.0:
-            layer_mask[normalized_activation > tau] = 0
+            layer_mask[normalized_activation < tau] = 1
         else:
-            layer_mask[torch.isclose(normalized_activation, torch.zeros_like(normalized_activation))] = 0
+            layer_mask[torch.isclose(normalized_activation, torch.zeros_like(normalized_activation))] = 1
         masks.append(layer_mask)
     return masks
 
 
-def _reset_dorman_neurons(model: QNetwork, redo_masks: torch.Tensor) -> QNetwork:
+def _reset_dormant_neurons(model: QNetwork, redo_masks: torch.Tensor, use_lecun_init: bool) -> QNetwork:
     """Re-initializes the dormant neurons of a model."""
 
     layers = list(model.named_modules())
@@ -77,9 +98,10 @@ def _reset_dorman_neurons(model: QNetwork, redo_masks: torch.Tensor) -> QNetwork
             # Last layer is reached, we're done checking and return
             return model
         elif isinstance(layer, nn.Conv2d) and isinstance(next_layer, nn.Linear):
-            nn.init.kaiming_uniform_(layer.weight.data[mask, ...], a=math.sqrt(5))
-            if layer.bias is not None:
-                _init_bias_kaiming_uniform(layer, mask)
+            if use_lecun_init:
+                _lecun_normal_reinit(layer, mask)
+            else:
+                _kaiming_uniform_reinit(layer, mask)
 
             # 2. Reset the outgoing weights to 0 with a mask created from the conv filters
             linear_mask = torch.flatten(repeat(mask, " c -> c h w ", h=7, w=7), start_dim=0)
@@ -89,9 +111,10 @@ def _reset_dorman_neurons(model: QNetwork, redo_masks: torch.Tensor) -> QNetwork
         else:
             # The initialization scheme is the same for conv2d and linear
             # 1. Reset the ingoing weights using the initialization distribution
-            nn.init.kaiming_uniform_(layer.weight.data[mask, ...], a=math.sqrt(5))
-            if layer.bias is not None:
-                _init_bias_kaiming_uniform(layer, mask)
+            if use_lecun_init:
+                _lecun_normal_reinit(layer, mask)
+            else:
+                _kaiming_uniform_reinit(layer, mask)
 
             # 2. Reset the outgoing weights to 0
             next_layer.weight.data[:, mask, ...].data.fill_(0)
@@ -130,7 +153,8 @@ def run_redo(
     optimizer: optim.Adam,
     tau: float,
     re_initialize: bool,
-) -> tuple[nn.Module, optim.Adam, float]:
+    use_lecun_init: bool,
+) -> tuple[nn.Module, optim.Adam, float, int]:
     """
     Checks the number of dormant neurons for a given model.
     If re_initialize is True, then the dormant neurons are re-initialized according to the scheme in
@@ -163,14 +187,14 @@ def run_redo(
         # Calculate the ReDo masks and dormant neuron fraction
         masks = _get_redo_masks(activations, tau)
         dormant_count = sum([torch.sum(mask) for mask in masks])
-        dormant_fraction = dormant_count / sum([torch.numel(mask) for mask in masks])
+        dormant_fraction = (dormant_count / sum([torch.numel(mask) for mask in masks])) * 100
 
     # Return without re-initializing anything because we're just counting
     if not re_initialize:
-        return model, optimizer, dormant_fraction
+        return model, optimizer, dormant_fraction, dormant_count
 
     # Re-initialize the dormant neurons and reset the Adam moments
-    _reset_dorman_neurons(model, masks)
+    _reset_dormant_neurons(model, masks, use_lecun_init)
     _reset_adam_moments(optimizer, masks)
 
-    return model, optimizer, dormant_fraction
+    return model, optimizer, dormant_fraction, dormant_count

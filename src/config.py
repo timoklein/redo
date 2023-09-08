@@ -24,17 +24,18 @@ class Config:
 
     # DQN settings
     buffer_size: int = 1000000
+    batch_size: int = 32
     learning_rate: float = 6.25 * 1e-5  # cleanRL default: 1e-4
     adam_eps: float = 1.5 * 1e-4
+    use_lecun_init: bool = True  # ReDO uses lecun_normal initializer, cleanRL uses the pytorch default (kaiming_uniform)
     gamma: float = 0.99
     tau: float = 1.0
     target_network_frequency: int = 1000  # cleanRL default: 8000
-    batch_size: int = 32
     start_e: float = 1.0
     end_e: float = 0.01
     exploration_fraction: float = 0.10
     learning_starts: int = 20000  # cleanRL default: 80000
-    train_frequency: int = 1  # cleanRL default: 4
+    train_frequency: int = 0.25  # cleanRL default: 4
 
     # ReDo settings
     enable_redo: bool = True

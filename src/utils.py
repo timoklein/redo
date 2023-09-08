@@ -1,7 +1,9 @@
+import math
 import typing
 
 import gymnasium as gym
 import torch
+import torch.nn as nn
 
 from .wrappers import *
 
@@ -37,6 +39,7 @@ def make_env(env_id, seed, idx, capture_video, run_name):
 
 def set_cuda_configuration(gpu: typing.Any) -> torch.device:
     """Set up the device for the desired GPU or all GPUs."""
+
     if gpu is None or gpu == -1 or gpu is False:
         device = torch.device("cpu")
     elif isinstance(gpu, int):
@@ -46,3 +49,29 @@ def set_cuda_configuration(gpu: typing.Any) -> torch.device:
         device = torch.device("cuda")
 
     return device
+
+
+@torch.no_grad()
+def lecun_normal_initializer(layer: nn.Module) -> None:
+    """
+    Initialization according to LeCun et al. (1998).
+    See here https://flax.readthedocs.io/en/latest/api_reference/flax.linen/_autosummary/flax.linen.initializers.lecun_normal.html
+    and here https://github.com/google/jax/blob/366a16f8ba59fe1ab59acede7efd160174134e01/jax/_src/nn/initializers.py#L460 .
+    Initializes bias terms to 0.
+    """
+
+    # Catch case where the whole network is passed
+    if not isinstance(layer, nn.Linear | nn.Conv2d):
+        return
+
+    # For a conv layer, this is num_channels*kernel_height*kernel_width
+    fan_in, _ = nn.init._calculate_fan_in_and_fan_out(layer.weight)
+
+    # This implementation follows the jax one
+    # https://github.com/google/jax/blob/366a16f8ba59fe1ab59acede7efd160174134e01/jax/_src/nn/initializers.py#L260
+    variance = 1.0 / fan_in
+    stddev = math.sqrt(variance) / 0.87962566103423978
+    torch.nn.init.trunc_normal_(layer.weight)
+    layer.weight *= stddev
+    if layer.bias is not None:
+        torch.nn.init.zeros_(layer.bias)
