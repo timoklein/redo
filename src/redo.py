@@ -3,6 +3,7 @@ from functools import partial
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from einops import repeat
 from torch import optim
 
@@ -49,12 +50,11 @@ def _get_activation(name: str, activations: dict[str, torch.Tensor]):
     """Fetches and stores the activations of a network layer."""
 
     def hook(layer: nn.Linear | nn.Conv2d, input: tuple[torch.Tensor], output: torch.Tensor) -> None:
-        # Taking the mean here conforms to the expectation under D in the main paper's formula
-        if isinstance(layer, nn.Conv2d):
-            activations[name] = output.abs().mean(dim=(0, 2, 3))
-        else:
-            assert isinstance(layer, nn.Linear), "Hook only supported for Conv2d and Linear layers"
-            activations[name] = output.abs().mean(dim=0)
+        """
+        Get the activations of a layer with relu nonlinearity.
+        ReLU has to be called explicitly here because the hook is attached to the conv/linear layer.
+        """
+        activations[name] = F.relu(output)
 
     return hook
 
@@ -66,16 +66,27 @@ def _get_redo_masks(activations: dict[str, torch.Tensor], tau: float) -> torch.T
     The returned mask has True where neurons are dormant and False where they are active.
     """
     masks = []
+
+    # Last activation are the q-values, which are never reset
     for name, activation in list(activations.items())[:-1]:
-        layer_mask = torch.zeros_like(activation, dtype=torch.bool)
+        # Taking the mean here conforms to the expectation under D in the main paper's formula
+        if activation.ndim == 4:
+            # Conv layer
+            score = activation.abs().mean(dim=(0, 2, 3))
+        else:
+            # Linear layer
+            score = activation.abs().mean(dim=0)
+
         # Divide by activation mean to make the threshold independent of the layer size
         # see https://github.com/google/dopamine/blob/ce36aab6528b26a699f5f1cefd330fdaf23a5d72/dopamine/labs/redo/weight_recyclers.py#L314
         # https://github.com/google/dopamine/issues/209
-        normalized_activation = activation / (activation.mean() + 1e-9)
+        normalized_score = score / (score.mean() + 1e-9)
+
+        layer_mask = torch.zeros_like(normalized_score, dtype=torch.bool)
         if tau > 0.0:
-            layer_mask[normalized_activation < tau] = 1
+            layer_mask[normalized_score < tau] = 1
         else:
-            layer_mask[torch.isclose(normalized_activation, torch.zeros_like(normalized_activation))] = 1
+            layer_mask[torch.isclose(normalized_score, torch.zeros_like(normalized_score))] = 1
         masks.append(layer_mask)
     return masks
 
