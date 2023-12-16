@@ -161,7 +161,7 @@ def main(cfg: Config) -> None:
 
                 redo_samples = rb.sample(cfg.redo_bs)
                 if global_step % cfg.redo_check_interval == 0 and global_step > cfg.learning_starts:
-                    q_network, optimizer, dormant_fraction, dormant_count = run_redo(
+                    redo_out = run_redo(
                         redo_samples,
                         model=q_network,
                         optimizer=optimizer,
@@ -169,9 +169,15 @@ def main(cfg: Config) -> None:
                         re_initialize=cfg.enable_redo,
                         use_lecun_init=cfg.use_lecun_init,
                     )
+
+                    q_network = redo_out["model"]
+                    optimizer = redo_out["optimizer"]
+
                     logs |= {
-                        "regularization/dormant_fraction": dormant_fraction,
-                        "regularization/dormant_count": dormant_count,
+                        f"regularization/dormant_t={cfg.tau}_fraction": redo_out["zero_fraction"],
+                        f"regularization/dormant_t={cfg.tau}_count": redo_out["zero_count"],
+                        "regularization/dormant_t=0.0_fraction": redo_out["dormant_fraction"],
+                        "regularization/dormant_t=0.0_count": redo_out["dormant_count"],
                     }
 
                 if global_step % 100 == 0:
