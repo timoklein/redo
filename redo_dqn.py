@@ -5,12 +5,12 @@ from pathlib import Path
 
 import gymnasium as gym
 import numpy as np
-import pyrallis
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
-import wandb
+import tyro
 
+import wandb
 from src.agent import QNetwork, linear_schedule
 from src.buffer import ReplayBuffer
 from src.config import Config
@@ -18,6 +18,7 @@ from src.redo import run_redo
 from src.utils import lecun_normal_initializer, make_env, set_cuda_configuration
 
 
+@torch.compile(mode="reduce-overhead", fullgraph=True)
 def dqn_loss(
     q_network: QNetwork,
     target_network: QNetwork,
@@ -66,6 +67,7 @@ def main(cfg: Config) -> None:
     np.random.seed(cfg.seed)
     torch.manual_seed(cfg.seed)
     torch.use_deterministic_algorithms(cfg.torch_deterministic)
+    torch.set_float32_matmul_precision("high")
 
     device = set_cuda_configuration(cfg.gpu)
 
@@ -221,5 +223,5 @@ def main(cfg: Config) -> None:
 
 
 if __name__ == "__main__":
-    cfg = pyrallis.parse(config_class=Config)
+    cfg = tyro.cli(Config)
     main(cfg)
