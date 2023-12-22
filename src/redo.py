@@ -205,22 +205,6 @@ def run_redo(
         for handle in handles:
             handle.remove()
 
-    if not re_initialize:
-        # Just count the fraction of tau=0 dormant neurons
-        tau = 0.0
-        masks = _get_redo_masks(activations, tau)
-        dormant_count = sum([torch.sum(mask) for mask in masks])
-        dormant_fraction = (dormant_count / sum([torch.numel(mask) for mask in masks])) * 100
-        # Return without re-initializing anything because we're just counting
-        return {
-            "model": model,
-            "optimizer": optimizer,
-            "zero_fraction": dormant_fraction,
-            "zero_count": dormant_count,
-            "dormant_fraction": 0.0,
-            "dormant_count": 0,
-        }
-    else:
         # Masks for tau=0 logging
         zero_masks = _get_redo_masks(activations, 0.0)
         zero_count = sum([torch.sum(mask) for mask in zero_masks])
@@ -232,8 +216,9 @@ def run_redo(
         dormant_fraction = (dormant_count / sum([torch.numel(mask) for mask in masks])) * 100
 
         # Re-initialize the dormant neurons and reset the Adam moments
-        _reset_dormant_neurons(model, masks, use_lecun_init)
-        _reset_adam_moments(optimizer, masks)
+        if re_initialize:
+            model = _reset_dormant_neurons(model, masks, use_lecun_init)
+            optimizer = _reset_adam_moments(optimizer, masks)
 
         return {
             "model": model,

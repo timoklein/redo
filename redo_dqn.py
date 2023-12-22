@@ -176,10 +176,10 @@ def main(cfg: Config) -> None:
                     optimizer = redo_out["optimizer"]
 
                     logs |= {
-                        f"regularization/dormant_t={cfg.tau}_fraction": redo_out["zero_fraction"],
-                        f"regularization/dormant_t={cfg.tau}_count": redo_out["zero_count"],
-                        "regularization/dormant_t=0.0_fraction": redo_out["dormant_fraction"],
-                        "regularization/dormant_t=0.0_count": redo_out["dormant_count"],
+                        f"regularization/dormant_t={cfg.redo_tau}_fraction": redo_out["dormant_fraction"],
+                        f"regularization/dormant_t={cfg.redo_tau}_count": redo_out["dormant_count"],
+                        "regularization/dormant_t=0.0_fraction": redo_out["zero_fraction"],
+                        "regularization/dormant_t=0.0_count": redo_out["zero_count"],
                     }
 
                 if global_step % 100 == 0:
