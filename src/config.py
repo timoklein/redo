@@ -7,9 +7,10 @@ class Config:
 
     # Experiment settings
     exp_name: str = "ReDo DQN"
+    tags: tuple[str, ...] | str | None = ("changed_hooks", )
     seed: int = 0
     torch_deterministic: bool = False
-    gpu: int | None = 1
+    gpu: int | None = 0
     track: bool = False
     wandb_project_name: str = "ReDo"
     wandb_entity: str | None = None
