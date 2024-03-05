@@ -1,4 +1,4 @@
-""" 
+"""
 This is a simplified version of the stable-baselines3 replay buffer taken from
 https://github.com/DLR-RM/stable-baselines3/blob/master/stable_baselines3/common/buffers.py
 

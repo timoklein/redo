@@ -10,6 +10,7 @@ from .agent import QNetwork
 from .buffer import ReplayBufferSamples
 
 
+# FIXME: Check that I correctly reset the bias here
 @torch.no_grad()
 def _kaiming_uniform_reinit(layer: nn.Linear | nn.Conv2d, mask: torch.Tensor) -> None:
     """Partially re-initializes the bias of a layer according to the Kaiming uniform scheme."""
@@ -90,67 +91,51 @@ def _get_redo_masks(activations: dict[str, torch.Tensor], tau: float) -> torch.T
     return masks
 
 
+@torch.no_grad()
 def _reset_dormant_neurons(model: QNetwork, redo_masks: torch.Tensor, use_lecun_init: bool) -> QNetwork:
     """Re-initializes the dormant neurons of a model."""
     # NOTE: This code only works for the Nature-DQN architecture in this repo
 
-    layers = list(model.named_modules())[1:]
-    ingoing_layers = layers[:-1]
-    outgoing_layers = layers[1:]
-
-    # Sanity checks
-    assert "q" not in [name for name, _ in ingoing_layers], "The q layer should not be reset."
-    assert "conv1" not in [name for name, _ in outgoing_layers], "The first conv layer should never be set to 0."
-    assert (
-        len(ingoing_layers) == len(outgoing_layers) == len(redo_masks)
-    ), "The number of layers and masks should match the number of masks."
+    layers = [layer for _, layer in list(model.named_modules())[1:]]
+    assert len(redo_masks) == len(layers) - 1, "Number of masks must match the number of layers"
 
     # Reset the ingoing weights
     # Here the mask size always matches the layer weight size
-    for (_, layer), mask in zip(ingoing_layers, redo_masks, strict=True):
-        if torch.all(~mask):
-            # No dormant neurons in this layer
-            continue
-        else:
-            # The initialization scheme is the same for conv2d and linear
-            # 1. Reset the ingoing weights using the initialization distribution
-            if use_lecun_init:
-                _lecun_normal_reinit(layer, mask)
-            else:
-                _kaiming_uniform_reinit(layer, mask)
+    for i in range(len(layers[:-1])):
+        mask = redo_masks[i]
+        layer = layers[i]
+        next_layer = layers[i + 1]
 
-    # Set the outgoing weights to 0
-    for (name, layer), (next_name, next_layer), mask in zip(ingoing_layers, outgoing_layers, redo_masks, strict=True):
+        # Skip if there are no dead neurons
         if torch.all(~mask):
             # No dormant neurons in this layer
             continue
-        elif next_name == "q":
-            # Skip the last layer
-            break
-        elif isinstance(layer, nn.Conv2d) and isinstance(next_layer, nn.Linear):
+
+        # The initialization scheme is the same for conv2d and linear
+        # 1. Reset the ingoing weights using the initialization distribution
+        if use_lecun_init:
+            _lecun_normal_reinit(layer, mask)
+        else:
+            _kaiming_uniform_reinit(layer, mask)
+
+        # 2. Reset the outgoing weights to 0
+        # NOTE: Don't reset the bias for the following layer or else you will create new dormant neurons
+        if isinstance(layer, nn.Conv2d) and isinstance(next_layer, nn.Linear):
             # Special case: Transition from conv to linear layer
             # Reset the outgoing weights to 0 with a mask created from the conv filters
             num_repeatition = next_layer.weight.data.shape[0] // mask.shape[0]
             linear_mask = torch.repeat_interleave(mask, num_repeatition)
             next_layer.weight.data[linear_mask, :].data.fill_(0)
-            if next_layer.bias is not None:
-                # Need to repeat the mask for the bias
-                # See https://github.com/google/dopamine/blob/485ea995655ebdf58a725dff5ec954b8847cae5f/dopamine/labs/redo/weight_recyclers.py#L642-L644
-                next_layer.bias.data[linear_mask].data.fill_(0)
         else:
             # Standard case: layer and next_layer are both conv or both linear
             # Reset the outgoing weights to 0
             next_layer.weight.data[:, mask, ...].data.fill_(0)
-            if next_layer.bias is not None:
-                # Need to repeat the mask for the bias
-                # See https://github.com/google/dopamine/blob/485ea995655ebdf58a725dff5ec954b8847cae5f/dopamine/labs/redo/weight_recyclers.py#L642-L644
-                num_repeatition = next_layer.weight.data.shape[0] // mask.shape[0]
-                repeated_mask = torch.repeat_interleave(mask, num_repeatition)
-                next_layer.bias.data[repeated_mask].data.fill_(0)
 
     return model
 
 
+# FIXME: Check that this is correct
+@torch.no_grad()
 def _reset_adam_moments(optimizer: optim.Adam, reset_masks: dict[str, torch.Tensor]) -> optim.Adam:
     """Resets the moments of the Adam optimizer for the dormant neurons."""
 
@@ -172,6 +157,7 @@ def _reset_adam_moments(optimizer: optim.Adam, reset_masks: dict[str, torch.Tens
     return optimizer
 
 
+@torch.no_grad()
 def run_redo(
     batch: ReplayBufferSamples,
     model: QNetwork,
