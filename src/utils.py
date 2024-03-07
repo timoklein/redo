@@ -5,7 +5,13 @@ import gymnasium as gym
 import torch
 import torch.nn as nn
 
-from .wrappers import *
+from .wrappers import (
+    ClipRewardEnv,
+    EpisodicLifeEnv,
+    FireResetEnv,
+    MaxAndSkipEnv,
+    NoopResetEnv,
+)
 
 
 def make_env(env_id, seed, idx, capture_video, run_name):

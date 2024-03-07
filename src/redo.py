@@ -10,23 +10,27 @@ from .agent import QNetwork
 from .buffer import ReplayBufferSamples
 
 
-# FIXME: Check that I correctly reset the bias here
 @torch.no_grad()
 def _kaiming_uniform_reinit(layer: nn.Linear | nn.Conv2d, mask: torch.Tensor) -> None:
     """Partially re-initializes the bias of a layer according to the Kaiming uniform scheme."""
 
-    nn.init.kaiming_uniform_(layer.weight.data[mask, ...], a=math.sqrt(5))
+    # This is adapted from https://pytorch.org/docs/stable/_modules/torch/nn/init.html#kaiming_uniform_
+    fan_in = nn.init._calculate_correct_fan(tensor=layer.weight, mode="fan_in")
+    gain = nn.init.calculate_gain(nonlinearity="relu", param=math.sqrt(5))
+    std = gain / math.sqrt(fan_in)
+    # Calculate uniform bounds from standard deviation
+    bound = math.sqrt(3.0) * std
+    layer.weight.data[mask, ...] = torch.empty_like(layer.weight.data[mask, ...]).uniform_(-bound, bound)
 
     if layer.bias is not None:
         if isinstance(layer, nn.Conv2d):
-            fan_in, _ = nn.init._calculate_fan_in_and_fan_out(layer.weight)
             if fan_in != 0:
                 bound = 1 / math.sqrt(fan_in)
-                nn.init.uniform_(layer.bias[mask], -bound, bound)
+                layer.bias.data[mask, ...] = torch.empty_like(layer.bias.data[mask, ...]).uniform_(-bound, bound)
         else:
-            fan_in, _ = nn.init._calculate_fan_in_and_fan_out(layer.weight)
             bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
-            nn.init.uniform_(layer.bias[mask], -bound, bound)
+            layer.bias.data[mask, ...] = torch.empty_like(layer.bias.data[mask, ...]).uniform_(-bound, bound)
+        # layer.bias.data[mask] = 0.0
 
 
 @torch.no_grad()
@@ -39,10 +43,10 @@ def _lecun_normal_reinit(layer: nn.Linear | nn.Conv2d, mask: torch.Tensor) -> No
     # https://github.com/google/jax/blob/366a16f8ba59fe1ab59acede7efd160174134e01/jax/_src/nn/initializers.py#L260
     variance = 1.0 / fan_in
     stddev = math.sqrt(variance) / 0.87962566103423978
-    torch.nn.init.trunc_normal_(layer.weight[mask])
+    layer.weight[mask] = nn.init._no_grad_trunc_normal_(layer.weight[mask], mean=0.0, std=1.0, a=-2.0, b=2.0)
     layer.weight[mask] *= stddev
     if layer.bias is not None:
-        torch.nn.init.zeros_(layer.bias[mask])
+        layer.bias.data[mask] = 0.0
 
 
 @torch.inference_mode()
@@ -125,11 +129,11 @@ def _reset_dormant_neurons(model: QNetwork, redo_masks: torch.Tensor, use_lecun_
             # Reset the outgoing weights to 0 with a mask created from the conv filters
             num_repeatition = next_layer.weight.data.shape[0] // mask.shape[0]
             linear_mask = torch.repeat_interleave(mask, num_repeatition)
-            next_layer.weight.data[linear_mask, :].data.fill_(0)
+            next_layer.weight.data[linear_mask, :] = 0.0
         else:
             # Standard case: layer and next_layer are both conv or both linear
             # Reset the outgoing weights to 0
-            next_layer.weight.data[:, mask, ...].data.fill_(0)
+            next_layer.weight.data[:, mask, ...] = 0.0
 
     return model
 
@@ -187,9 +191,6 @@ def run_redo(
 
         # Calculate activations
         _ = model(obs)
-        # Remove the hooks again
-        for handle in handles:
-            handle.remove()
 
         # Masks for tau=0 logging
         zero_masks = _get_redo_masks(activations, 0.0)
@@ -205,6 +206,10 @@ def run_redo(
         if re_initialize:
             model = _reset_dormant_neurons(model, masks, use_lecun_init)
             optimizer = _reset_adam_moments(optimizer, masks)
+
+        # Remove the hooks again
+        for handle in handles:
+            handle.remove()
 
         return {
             "model": model,
