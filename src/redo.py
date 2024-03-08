@@ -23,6 +23,8 @@ def _kaiming_uniform_reinit(layer: nn.Linear | nn.Conv2d, mask: torch.Tensor) ->
     layer.weight.data[mask, ...] = torch.empty_like(layer.weight.data[mask, ...]).uniform_(-bound, bound)
 
     if layer.bias is not None:
+        # NOTE: The original code resets the bias to 0.0
+        # layer.bias.data[mask] = 0.0
         if isinstance(layer, nn.Conv2d):
             if fan_in != 0:
                 bound = 1 / math.sqrt(fan_in)
@@ -30,7 +32,6 @@ def _kaiming_uniform_reinit(layer: nn.Linear | nn.Conv2d, mask: torch.Tensor) ->
         else:
             bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
             layer.bias.data[mask, ...] = torch.empty_like(layer.bias.data[mask, ...]).uniform_(-bound, bound)
-        # layer.bias.data[mask] = 0.0
 
 
 @torch.no_grad()

@@ -30,12 +30,12 @@ class Config:
     use_lecun_init: bool = False  # ReDO uses lecun_normal initializer, cleanRL uses the pytorch default (kaiming_uniform)
     gamma: float = 0.99
     tau: float = 1.0
-    target_network_frequency: int = 1000  # cleanRL default: 8000, 4 freq -> 8000, 0.5 freq -> 1000, 1 -> 2000
+    target_network_frequency: int = 2000  # cleanRL default: 8000, 4 freq -> 8000, 1 -> 2000
     start_e: float = 1.0
     end_e: float = 0.01
     exploration_fraction: float = 0.10
     learning_starts: int = 20_000  # cleanRL default: 80000, theirs 20000
-    train_frequency: int = 0.5  # cleanRL default: 4, theirs 1
+    train_frequency: int = 1  # cleanRL default: 4, theirs 1
 
     # ReDo settings
     enable_redo: bool = False
