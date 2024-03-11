@@ -24,14 +24,14 @@ def _kaiming_uniform_reinit(layer: nn.Linear | nn.Conv2d, mask: torch.Tensor) ->
 
     if layer.bias is not None:
         # NOTE: The original code resets the bias to 0.0
-        # layer.bias.data[mask] = 0.0
-        if isinstance(layer, nn.Conv2d):
-            if fan_in != 0:
-                bound = 1 / math.sqrt(fan_in)
-                layer.bias.data[mask, ...] = torch.empty_like(layer.bias.data[mask, ...]).uniform_(-bound, bound)
-        else:
-            bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
-            layer.bias.data[mask, ...] = torch.empty_like(layer.bias.data[mask, ...]).uniform_(-bound, bound)
+        layer.bias.data[mask] = 0.0
+        # if isinstance(layer, nn.Conv2d):
+        #     if fan_in != 0:
+        #         bound = 1 / math.sqrt(fan_in)
+        #         layer.bias.data[mask, ...] = torch.empty_like(layer.bias.data[mask, ...]).uniform_(-bound, bound)
+        # else:
+        #     bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
+        #     layer.bias.data[mask, ...] = torch.empty_like(layer.bias.data[mask, ...]).uniform_(-bound, bound)
 
 
 @torch.no_grad()
@@ -130,9 +130,9 @@ def _reset_dormant_neurons(model: QNetwork, redo_masks: torch.Tensor, use_lecun_
         if isinstance(layer, nn.Conv2d) and isinstance(next_layer, nn.Linear):
             # Special case: Transition from conv to linear layer
             # Reset the outgoing weights to 0 with a mask created from the conv filters
-            num_repeatition = next_layer.weight.data.shape[0] // mask.shape[0]
+            num_repeatition = next_layer.weight.data.shape[1] // mask.shape[0]
             linear_mask = torch.repeat_interleave(mask, num_repeatition)
-            next_layer.weight.data[linear_mask, :] = 0.0
+            next_layer.weight.data[:, linear_mask] = 0.0
         else:
             # Standard case: layer and next_layer are both conv or both linear
             # Reset the outgoing weights to 0
@@ -165,10 +165,10 @@ def _reset_adam_moments(optimizer: optim.Adam, reset_masks: dict[str, torch.Tens
             and len(optimizer.state_dict()["state"][i * 2 + 2]["exp_avg"].shape) == 2
         ):
             # Catch transition from conv to linear layer through moment shapes
-            num_repeatition = optimizer.state_dict()["state"][i * 2 + 2]["exp_avg"].shape[0] // mask.shape[0]
+            num_repeatition = optimizer.state_dict()["state"][i * 2 + 2]["exp_avg"].shape[1] // mask.shape[0]
             linear_mask = torch.repeat_interleave(mask, num_repeatition)
-            optimizer.state_dict()["state"][i * 2 + 2]["exp_avg"][linear_mask, ...] = 0.0
-            optimizer.state_dict()["state"][i * 2 + 2]["exp_avg_sq"][linear_mask, ...] = 0.0
+            optimizer.state_dict()["state"][i * 2 + 2]["exp_avg"][:, linear_mask] = 0.0
+            optimizer.state_dict()["state"][i * 2 + 2]["exp_avg_sq"][:, linear_mask] = 0.0
             optimizer.state_dict()["state"][i * 2 + 2]["step"].zero_()
         else:
             # Standard case: layer and next_layer are both conv or both linear

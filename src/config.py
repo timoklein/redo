@@ -7,7 +7,7 @@ class Config:
 
     # Experiment settings
     exp_name: str = "ReDo DQN"
-    tags: tuple[str, ...] | str | None = ("v0.5_outgoing_moment_reset",)
+    tags: tuple[str, ...] | str | None = ("v0.6_full_moments_zero_bias",)
     seed: int = 0
     torch_deterministic: bool = True
     gpu: int | None = 0
