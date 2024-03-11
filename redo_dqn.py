@@ -18,7 +18,6 @@ from src.redo import run_redo
 from src.utils import lecun_normal_initializer, make_env, set_cuda_configuration
 
 
-@torch.compile(mode="reduce-overhead", fullgraph=True)
 def dqn_loss(
     q_network: QNetwork,
     target_network: QNetwork,

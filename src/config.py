@@ -7,10 +7,10 @@ class Config:
 
     # Experiment settings
     exp_name: str = "ReDo DQN"
-    tags: tuple[str, ...] | str | None = ("fixed_nonzero_bias",)
+    tags: tuple[str, ...] | str | None = ("v0.4_moment_count_resets",)
     seed: int = 0
-    torch_deterministic: bool = False
-    gpu: int | None = 0
+    torch_deterministic: bool = True
+    gpu: int | None = 1
     track: bool = False
     wandb_project_name: str = "ReDo"
     wandb_entity: str | None = None
@@ -18,7 +18,7 @@ class Config:
     save_model: bool = False
 
     # Environment settings
-    env_id: str = "DemonAttack-v4"
+    env_id: str = "DemonAttackNoFrameskip-v4"
     total_timesteps: int = 10_000_000
     num_envs: int = 1
 

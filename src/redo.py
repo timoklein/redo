@@ -24,14 +24,14 @@ def _kaiming_uniform_reinit(layer: nn.Linear | nn.Conv2d, mask: torch.Tensor) ->
 
     if layer.bias is not None:
         # NOTE: The original code resets the bias to 0.0
-        # layer.bias.data[mask] = 0.0
-        if isinstance(layer, nn.Conv2d):
-            if fan_in != 0:
-                bound = 1 / math.sqrt(fan_in)
-                layer.bias.data[mask, ...] = torch.empty_like(layer.bias.data[mask, ...]).uniform_(-bound, bound)
-        else:
-            bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
-            layer.bias.data[mask, ...] = torch.empty_like(layer.bias.data[mask, ...]).uniform_(-bound, bound)
+        layer.bias.data[mask] = 0.0
+        # if isinstance(layer, nn.Conv2d):
+        #     if fan_in != 0:
+        #         bound = 1 / math.sqrt(fan_in)
+        #         layer.bias.data[mask, ...] = torch.empty_like(layer.bias.data[mask, ...]).uniform_(-bound, bound)
+        # else:
+        #     bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
+        #     layer.bias.data[mask, ...] = torch.empty_like(layer.bias.data[mask, ...]).uniform_(-bound, bound)
 
 
 @torch.no_grad()
@@ -125,6 +125,7 @@ def _reset_dormant_neurons(model: QNetwork, redo_masks: torch.Tensor, use_lecun_
 
         # 2. Reset the outgoing weights to 0
         # NOTE: Don't reset the bias for the following layer or else you will create new dormant neurons
+        # FIXME: Try to check the name here and don't set to 0 if it's the Q layer
         if isinstance(layer, nn.Conv2d) and isinstance(next_layer, nn.Linear):
             # Special case: Transition from conv to linear layer
             # Reset the outgoing weights to 0 with a mask created from the conv filters
@@ -139,7 +140,6 @@ def _reset_dormant_neurons(model: QNetwork, redo_masks: torch.Tensor, use_lecun_
     return model
 
 
-# FIXME: Check that this is correct
 @torch.no_grad()
 def _reset_adam_moments(optimizer: optim.Adam, reset_masks: dict[str, torch.Tensor]) -> optim.Adam:
     """Resets the moments of the Adam optimizer for the dormant neurons."""
@@ -149,16 +149,21 @@ def _reset_adam_moments(optimizer: optim.Adam, reset_masks: dict[str, torch.Tens
         # Reset the moments for the weights
         # NOTE: I don't think it's possible to just reset the step for moment that's being reset
         # NOTE: As far as I understand the code, they also don't reset the step count
-        # optimizer.state_dict()["state"][i*2]['step'] = torch.tensor(0.0)
         optimizer.state_dict()["state"][i * 2]["exp_avg"][mask, ...] = 0.0
         optimizer.state_dict()["state"][i * 2]["exp_avg_sq"][mask, ...] = 0.0
+        optimizer.state_dict()["state"][i*2]['step'].zero_()
 
         # Reset the moments for the bias
-        # optimizer.state_dict()["state"][i*2 + 1]['step'] = torch.tensor(0.0)
         optimizer.state_dict()["state"][i * 2 + 1]["exp_avg"][mask] = 0.0
         optimizer.state_dict()["state"][i * 2 + 1]["exp_avg_sq"][mask] = 0.0
+        optimizer.state_dict()["state"][i*2 + 1]['step'].zero_()
 
-        # Reset the moments for the bias
+        # FIXME: This must properly handle outgoing weights from conv to linear
+        # Reset the moments for the output weights
+        # optimizer.state_dict()["state"][i * 2 + 2]["exp_avg"][:, mask, ...] = 0.0
+        # optimizer.state_dict()["state"][i * 2 + 2]["exp_avg_sq"][:, mask, ...] = 0.0
+        # optimizer.state_dict()["state"][i*2 + 2]['step'] = torch.tensor(0.0)
+
     return optimizer
 
 
@@ -195,8 +200,9 @@ def run_redo(
 
         # Masks for tau=0 logging
         zero_masks = _get_redo_masks(activations, 0.0)
+        total_neurons = sum([torch.numel(mask) for mask in zero_masks])
         zero_count = sum([torch.sum(mask) for mask in zero_masks])
-        zero_fraction = (zero_count / sum([torch.numel(mask) for mask in zero_masks])) * 100
+        zero_fraction = (zero_count / total_neurons) * 100
 
         # Calculate the masks actually used for resetting
         masks = _get_redo_masks(activations, tau)
@@ -205,6 +211,10 @@ def run_redo(
 
         # Re-initialize the dormant neurons and reset the Adam moments
         if re_initialize:
+            print("Re-initializing dormant neurons")
+            print(
+                f"Total neurons: {total_neurons} | Dormant neurons: {dormant_count} | Dormant fraction: {dormant_fraction:.2f}%"
+            )
             model = _reset_dormant_neurons(model, masks, use_lecun_init)
             optimizer = _reset_adam_moments(optimizer, masks)
 
