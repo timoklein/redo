@@ -24,14 +24,14 @@ def _kaiming_uniform_reinit(layer: nn.Linear | nn.Conv2d, mask: torch.Tensor) ->
 
     if layer.bias is not None:
         # NOTE: The original code resets the bias to 0.0
-        layer.bias.data[mask] = 0.0
-        # if isinstance(layer, nn.Conv2d):
-        #     if fan_in != 0:
-        #         bound = 1 / math.sqrt(fan_in)
-        #         layer.bias.data[mask, ...] = torch.empty_like(layer.bias.data[mask, ...]).uniform_(-bound, bound)
-        # else:
-        #     bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
-        #     layer.bias.data[mask, ...] = torch.empty_like(layer.bias.data[mask, ...]).uniform_(-bound, bound)
+        # layer.bias.data[mask] = 0.0
+        if isinstance(layer, nn.Conv2d):
+            if fan_in != 0:
+                bound = 1 / math.sqrt(fan_in)
+                layer.bias.data[mask, ...] = torch.empty_like(layer.bias.data[mask, ...]).uniform_(-bound, bound)
+        else:
+            bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
+            layer.bias.data[mask, ...] = torch.empty_like(layer.bias.data[mask, ...]).uniform_(-bound, bound)
 
 
 @torch.no_grad()
@@ -101,15 +101,16 @@ def _reset_dormant_neurons(model: QNetwork, redo_masks: torch.Tensor, use_lecun_
     """Re-initializes the dormant neurons of a model."""
     # NOTE: This code only works for the Nature-DQN architecture in this repo
 
-    layers = [layer for _, layer in list(model.named_modules())[1:]]
+    layers = [(name, layer) for name, layer in list(model.named_modules())[1:]]
     assert len(redo_masks) == len(layers) - 1, "Number of masks must match the number of layers"
 
     # Reset the ingoing weights
     # Here the mask size always matches the layer weight size
     for i in range(len(layers[:-1])):
         mask = redo_masks[i]
-        layer = layers[i]
-        next_layer = layers[i + 1]
+        layer = layers[i][1]
+        next_layer = layers[i + 1][1]
+        next_layer_name = layers[i + 1][0]
 
         # Skip if there are no dead neurons
         if torch.all(~mask):
@@ -125,7 +126,7 @@ def _reset_dormant_neurons(model: QNetwork, redo_masks: torch.Tensor, use_lecun_
 
         # 2. Reset the outgoing weights to 0
         # NOTE: Don't reset the bias for the following layer or else you will create new dormant neurons
-        # FIXME: Try to check the name here and don't set to 0 if it's the Q layer
+        # and not next_layer_name == 'q'
         if isinstance(layer, nn.Conv2d) and isinstance(next_layer, nn.Linear):
             # Special case: Transition from conv to linear layer
             # Reset the outgoing weights to 0 with a mask created from the conv filters
@@ -151,18 +152,30 @@ def _reset_adam_moments(optimizer: optim.Adam, reset_masks: dict[str, torch.Tens
         # NOTE: As far as I understand the code, they also don't reset the step count
         optimizer.state_dict()["state"][i * 2]["exp_avg"][mask, ...] = 0.0
         optimizer.state_dict()["state"][i * 2]["exp_avg_sq"][mask, ...] = 0.0
-        optimizer.state_dict()["state"][i*2]['step'].zero_()
+        optimizer.state_dict()["state"][i * 2]["step"].zero_()
 
         # Reset the moments for the bias
         optimizer.state_dict()["state"][i * 2 + 1]["exp_avg"][mask] = 0.0
         optimizer.state_dict()["state"][i * 2 + 1]["exp_avg_sq"][mask] = 0.0
-        optimizer.state_dict()["state"][i*2 + 1]['step'].zero_()
+        optimizer.state_dict()["state"][i * 2 + 1]["step"].zero_()
 
-        # FIXME: This must properly handle outgoing weights from conv to linear
         # Reset the moments for the output weights
-        # optimizer.state_dict()["state"][i * 2 + 2]["exp_avg"][:, mask, ...] = 0.0
-        # optimizer.state_dict()["state"][i * 2 + 2]["exp_avg_sq"][:, mask, ...] = 0.0
-        # optimizer.state_dict()["state"][i*2 + 2]['step'] = torch.tensor(0.0)
+        if (
+            len(optimizer.state_dict()["state"][i * 2]["exp_avg"].shape) == 4
+            and len(optimizer.state_dict()["state"][i * 2 + 2]["exp_avg"].shape) == 2
+        ):
+            # Catch transition from conv to linear layer through moment shapes
+            num_repeatition = optimizer.state_dict()["state"][i * 2 + 2]["exp_avg"].shape[0] // mask.shape[0]
+            linear_mask = torch.repeat_interleave(mask, num_repeatition)
+            optimizer.state_dict()["state"][i * 2 + 2]["exp_avg"][linear_mask, ...] = 0.0
+            optimizer.state_dict()["state"][i * 2 + 2]["exp_avg_sq"][linear_mask, ...] = 0.0
+            optimizer.state_dict()["state"][i * 2 + 2]["step"].zero_()
+        else:
+            # Standard case: layer and next_layer are both conv or both linear
+            # Reset the outgoing weights to 0
+            optimizer.state_dict()["state"][i * 2 + 2]["exp_avg"][:, mask, ...] = 0.0
+            optimizer.state_dict()["state"][i * 2 + 2]["exp_avg_sq"][:, mask, ...] = 0.0
+            optimizer.state_dict()["state"][i * 2 + 2]["step"].zero_()
 
     return optimizer
 

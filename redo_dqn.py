@@ -1,4 +1,5 @@
 # docs and experiment results can be found at https://docs.cleanrl.dev/rl-algorithms/dqn/#dqn_ataripy
+import os
 import random
 import time
 from pathlib import Path
@@ -61,11 +62,15 @@ def main(cfg: Config) -> None:
         wandb.define_metric("evaluation_episode")
         wandb.define_metric("eval/episodic_return", step_metric="evaluation_episode")
 
+    # To get deterministic pytorch to work
+    if cfg.torch_deterministic:
+        os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+        torch.use_deterministic_algorithms(True)
+
     # TRY NOT TO MODIFY: seeding
     random.seed(cfg.seed)
     np.random.seed(cfg.seed)
     torch.manual_seed(cfg.seed)
-    torch.use_deterministic_algorithms(cfg.torch_deterministic)
     torch.set_float32_matmul_precision("high")
 
     device = set_cuda_configuration(cfg.gpu)

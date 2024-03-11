@@ -7,10 +7,10 @@ class Config:
 
     # Experiment settings
     exp_name: str = "ReDo DQN"
-    tags: tuple[str, ...] | str | None = ("v0.4_moment_count_resets",)
+    tags: tuple[str, ...] | str | None = ("v0.5_outgoing_moment_reset",)
     seed: int = 0
     torch_deterministic: bool = True
-    gpu: int | None = 1
+    gpu: int | None = 0
     track: bool = False
     wandb_project_name: str = "ReDo"
     wandb_entity: str | None = None
