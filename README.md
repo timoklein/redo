@@ -8,17 +8,15 @@ This phenomenon is particularly prevalent in value-based deep reinforcement lear
 
 ## Dormant neurons
 
-The score $s_i^{\ell}$ of a neuron $i$ in layer $l$ is defined as the absolute value of its activation $\mathbb{E}_{x \in D} |h_i^{\ell}(x)|$ divided by the normalized average of absolute activations within the layer $\frac{1}{H^{\ell}} \sum_{k \in h} \mathbb{E}_{x \in D}|h_k^{\ell}(x)|$:
+The score $s_i^{\ell}$ of a neuron $i$ in layer $l$ is defined as the absolute value of its activation $`\mathbb{E}_{x \in D} |h_i^{\ell}(x)|`$ divided by the normalized average of absolute activations within the layer $`\frac{1}{H^{\ell}} \sum_{k \in h} \mathbb{E}_{x \in D}|h_k^{\ell}(x)|`$:
 
-$$
-s_i^{\ell}=\frac{\mathbb{E}_{x \in D}|h_i^{\ell}(x)|}{\frac{1}{H^{\ell}} \sum_{k \in h} \mathbb{E}_{x \in D}|h_k^{\ell}(x)|}
-$$
+$$`s_i^{\ell}=\frac{\mathbb{E}_{x \in D}|h_i^{\ell}(x)|}{\frac{1}{H^{\ell}} \sum_{k \in h} \mathbb{E}_{x \in D}|h_k^{\ell}(x)|}`$$
 
 A neuron is defined as $\tau$-dormant when $s_i^{\ell} \leq \tau$.
 
 ## ReDo
 
-<img src="./img/ReDo_algorithm_pseudocode.png" width="200" >
+<img src="./img/ReDo_algorithm_pseudocode.png" width="300" >
 
 Every $F$-th time step:
 
