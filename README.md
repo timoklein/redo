@@ -15,6 +15,9 @@ Update 3:
 Adam moment step-count reset is crucial for performance. Else the Adam updates will immediately create dead neurons again.  
 Preliminary results now look promising.
 
+Update 4:
+Fixed the outgoing weight resets. See [this issue](https://github.com/timoklein/redo/issues/3). Thanks @SaminYeasar!
+
 Episodic Return             |  Feature rank
 :-------------------------:|:-------------------------:
 ![Reward](./img/reward.png )  |  ![Dormant neurons](./img/dormant_counts.png)
