@@ -1,4 +1,5 @@
 # docs and experiment results can be found at https://docs.cleanrl.dev/rl-algorithms/dqn/#dqn_ataripy
+import os
 import random
 import time
 from pathlib import Path
@@ -18,7 +19,6 @@ from src.redo import run_redo
 from src.utils import lecun_normal_initializer, make_env, set_cuda_configuration
 
 
-@torch.compile(mode="reduce-overhead", fullgraph=True)
 def dqn_loss(
     q_network: QNetwork,
     target_network: QNetwork,
@@ -62,11 +62,15 @@ def main(cfg: Config) -> None:
         wandb.define_metric("evaluation_episode")
         wandb.define_metric("eval/episodic_return", step_metric="evaluation_episode")
 
+    # To get deterministic pytorch to work
+    if cfg.torch_deterministic:
+        os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+        torch.use_deterministic_algorithms(True)
+
     # TRY NOT TO MODIFY: seeding
     random.seed(cfg.seed)
     np.random.seed(cfg.seed)
     torch.manual_seed(cfg.seed)
-    torch.use_deterministic_algorithms(cfg.torch_deterministic)
     torch.set_float32_matmul_precision("high")
 
     device = set_cuda_configuration(cfg.gpu)
@@ -138,7 +142,9 @@ def main(cfg: Config) -> None:
 
         # ALGO LOGIC: training.
         if global_step > cfg.learning_starts:
-            if global_step % cfg.train_frequency == 0:
+            # Flag for logging
+            done_update = False
+            if done_update := global_step % cfg.train_frequency == 0:
                 data = rb.sample(cfg.batch_size)
                 loss, old_val = dqn_loss(
                     q_network=q_network,
@@ -161,33 +167,33 @@ def main(cfg: Config) -> None:
                     "charts/SPS": int(global_step / (time.time() - start_time)),
                 }
 
+            if global_step % cfg.redo_check_interval == 0:
                 redo_samples = rb.sample(cfg.redo_bs)
-                if global_step % cfg.redo_check_interval == 0 and global_step > cfg.learning_starts:
-                    redo_out = run_redo(
-                        redo_samples,
-                        model=q_network,
-                        optimizer=optimizer,
-                        tau=cfg.redo_tau,
-                        re_initialize=cfg.enable_redo,
-                        use_lecun_init=cfg.use_lecun_init,
-                    )
+                redo_out = run_redo(
+                    redo_samples,
+                    model=q_network,
+                    optimizer=optimizer,
+                    tau=cfg.redo_tau,
+                    re_initialize=cfg.enable_redo,
+                    use_lecun_init=cfg.use_lecun_init,
+                )
 
-                    q_network = redo_out["model"]
-                    optimizer = redo_out["optimizer"]
+                q_network = redo_out["model"]
+                optimizer = redo_out["optimizer"]
 
-                    logs |= {
-                        f"regularization/dormant_t={cfg.redo_tau}_fraction": redo_out["dormant_fraction"],
-                        f"regularization/dormant_t={cfg.redo_tau}_count": redo_out["dormant_count"],
-                        "regularization/dormant_t=0.0_fraction": redo_out["zero_fraction"],
-                        "regularization/dormant_t=0.0_count": redo_out["zero_count"],
-                    }
+                logs |= {
+                    f"regularization/dormant_t={cfg.redo_tau}_fraction": redo_out["dormant_fraction"],
+                    f"regularization/dormant_t={cfg.redo_tau}_count": redo_out["dormant_count"],
+                    "regularization/dormant_t=0.0_fraction": redo_out["zero_fraction"],
+                    "regularization/dormant_t=0.0_count": redo_out["zero_count"],
+                }
 
-                if global_step % 100 == 0:
-                    print("SPS:", int(global_step / (time.time() - start_time)))
-                    wandb.log(
-                        logs,
-                        step=global_step,
-                    )
+            if global_step % 100 == 0 and done_update:
+                print("SPS:", int(global_step / (time.time() - start_time)))
+                wandb.log(
+                    logs,
+                    step=global_step,
+                )
 
             # update target network
             if global_step % cfg.target_network_frequency == 0:

@@ -7,9 +7,9 @@ class Config:
 
     # Experiment settings
     exp_name: str = "ReDo DQN"
-    tags: tuple[str, ...] | str | None = ("changed_hooks", )
+    tags: tuple[str, ...] | str | None = ("v0.6_full_moments_zero_bias",)
     seed: int = 0
-    torch_deterministic: bool = False
+    torch_deterministic: bool = True
     gpu: int | None = 0
     track: bool = False
     wandb_project_name: str = "ReDo"
@@ -18,7 +18,7 @@ class Config:
     save_model: bool = False
 
     # Environment settings
-    env_id: str = "DemonAttack-v4"
+    env_id: str = "DemonAttackNoFrameskip-v4"
     total_timesteps: int = 10_000_000
     num_envs: int = 1
 
@@ -30,12 +30,12 @@ class Config:
     use_lecun_init: bool = False  # ReDO uses lecun_normal initializer, cleanRL uses the pytorch default (kaiming_uniform)
     gamma: float = 0.99
     tau: float = 1.0
-    target_network_frequency: int = 1000  # cleanRL default: 8000, 4 freq -> 8000, 0.5 freq -> 1000, 1 -> 2000
+    target_network_frequency: int = 2000  # cleanRL default: 8000, 4 freq -> 8000, 1 -> 2000
     start_e: float = 1.0
     end_e: float = 0.01
     exploration_fraction: float = 0.10
     learning_starts: int = 20_000  # cleanRL default: 80000, theirs 20000
-    train_frequency: int = 0.5  # cleanRL default: 4, theirs 1
+    train_frequency: int = 1  # cleanRL default: 4, theirs 1
 
     # ReDo settings
     enable_redo: bool = False

@@ -1,4 +1,4 @@
-""" 
+"""
 The wrappers are taken from stable-baselines3 with unnecessary ones removed.
 https://github.com/DLR-RM/stable-baselines3/blob/feat/gymnasium-support/stable_baselines3/common/type_aliases.py
 """
