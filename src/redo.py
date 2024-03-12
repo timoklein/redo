@@ -99,7 +99,6 @@ def _get_redo_masks(activations: dict[str, torch.Tensor], tau: float) -> torch.T
 @torch.no_grad()
 def _reset_dormant_neurons(model: QNetwork, redo_masks: torch.Tensor, use_lecun_init: bool) -> QNetwork:
     """Re-initializes the dormant neurons of a model."""
-    # NOTE: This code only works for the Nature-DQN architecture in this repo
 
     layers = [(name, layer) for name, layer in list(model.named_modules())[1:]]
     assert len(redo_masks) == len(layers) - 1, "Number of masks must match the number of layers"
@@ -149,7 +148,7 @@ def _reset_adam_moments(optimizer: optim.Adam, reset_masks: dict[str, torch.Tens
     for i, mask in enumerate(reset_masks):
         # Reset the moments for the weights
         # NOTE: I don't think it's possible to just reset the step for moment that's being reset
-        # NOTE: As far as I understand the code, they also don't reset the step count
+        # NOTE: Step count resets are key to the algorithm's performance
         optimizer.state_dict()["state"][i * 2]["exp_avg"][mask, ...] = 0.0
         optimizer.state_dict()["state"][i * 2]["exp_avg_sq"][mask, ...] = 0.0
         optimizer.state_dict()["state"][i * 2]["step"].zero_()
