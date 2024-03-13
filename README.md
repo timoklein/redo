@@ -1,7 +1,5 @@
 ## Recycling dormant neurons
 
-> Status: Code should be correct apart from minor details that I am currently ablating (e.g. whether to reset the bias to 0 or initalization). Final experiments are running and should be done by the end of the week.
-
 Pytorch reimplementation of [ReDo](https://arxiv.org/abs/2302.12902) (The Dormant Neuron Phenomenon in Deep Reinforcement Learning).
 The paper establishes the _dormant neuron phenomenon_, where over the course of training a network with nonstationary targets, a significant portion of the neurons in a deep network become _dormant_, i.e. their activations become minimal to compared the other neurons in the layer.
 This phenomenon is particularly prevalent in value-based deep reinforcement learning algorithms, such as DQN and its variants. As a solution, the authors propose to periodically check for dormant neurons and reinitialize them.
@@ -27,9 +25,19 @@ Every $F$-th time step:
 
 ## Results
 
-Episodic Return             |  Dormant count
-:-------------------------:|:-------------------------:
-![Reward](./img/reward.png )  |  ![Dormant neurons](./img/tau_0_dormant.png)
+These results were generated using 3 seeds. Note I was not using typical hyperparameters for DQN, but instead chose a hyperparameter set to exaggerate the dormant neuron phenomenon.  
+In particular:
+
+- Updates are done every environment step instead of every 4 steps.
+- Target network updates every 2000 steps instead of every 8000.
+- Fewer random samples before learing starts.
+- $\tau=0.1$ instead of $\tau=0.025$.
+
+Episodic Return            | Dormant count $\tau=0.0$ | Dormant count $\tau=0.1$ |
+:-------------------------:|:-------------------------:|:-------------------------:|
+![Reward](./img/redo_episodic_returns.png ) |  ![Dormant neurons](./img/redo_tau_0_0_dormant_fraction.png) | ![Dormant neurons](./img/redo_tau_0_1_dormant_fraction.png) |
+
+I've skipped running 10M or 100M experiments because these are very expensive in terms of compute.
 
 ## Implementation progress
 
@@ -45,14 +53,6 @@ Preliminary results now look promising.
 
 Update 4:
 Fixed the outgoing weight resets where the mask was generated wrongly and not applied to the outgoing weights. See [this issue](https://github.com/timoklein/redo/issues/3). Thanks @SaminYeasar!
-
-## TODOS
-
-- [x] Check which type of bias reset works better in the ingoing weights
-- [x] Reset outgoing weights momentum
-- [x] Check whether I should reset parts of the Q-function or not.
-- [ ] Finish runs and add 10M step experiments
-- [x] Update README
 
 ## Citations
 

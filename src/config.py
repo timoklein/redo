@@ -7,7 +7,7 @@ class Config:
 
     # Experiment settings
     exp_name: str = "ReDo DQN"
-    tags: tuple[str, ...] | str | None = ("v0.6_full_moments_zero_bias",)
+    tags: tuple[str, ...] | str | None = None
     seed: int = 0
     torch_deterministic: bool = True
     gpu: int | None = 0
@@ -30,15 +30,15 @@ class Config:
     use_lecun_init: bool = False  # ReDO uses lecun_normal initializer, cleanRL uses the pytorch default (kaiming_uniform)
     gamma: float = 0.99
     tau: float = 1.0
-    target_network_frequency: int = 2000  # cleanRL default: 8000, 4 freq -> 8000, 1 -> 2000
+    target_network_frequency: int = 8000  # cleanRL default: 8000, 4 freq -> 8000, 1 -> 2000
     start_e: float = 1.0
     end_e: float = 0.01
     exploration_fraction: float = 0.10
-    learning_starts: int = 20_000  # cleanRL default: 80000, theirs 20000
-    train_frequency: int = 1  # cleanRL default: 4, theirs 1
+    learning_starts: int = 80_000  # cleanRL default: 80000, theirs 20000
+    train_frequency: int = 4  # cleanRL default: 4, theirs 1
 
     # ReDo settings
     enable_redo: bool = False
-    redo_tau: float = 0.1  # 0.025 for default, else 0.1
+    redo_tau: float = 0.025  # 0.025 for default, else 0.1
     redo_check_interval: int = 1000
     redo_bs: int = 64

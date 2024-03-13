@@ -10,8 +10,8 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 import tyro
-
 import wandb
+
 from src.agent import QNetwork, linear_schedule
 from src.buffer import ReplayBuffer
 from src.config import Config
