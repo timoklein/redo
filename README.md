@@ -35,7 +35,7 @@ In particular:
 
 Episodic Return            | Dormant count $\tau=0.0$ | Dormant count $\tau=0.1$ |
 :-------------------------:|:-------------------------:|:-------------------------:|
-![Reward](./img/redo_episodic_returns.png ) |  ![Dormant neurons](./img/redo_tau_0_0_dormant_fraction.png) | ![Dormant neurons](./img/redo_tau_0_1_dormant_fraction.png) |
+![Reward](./img/redo_episodic_returns.png ) |  ![Dormant neurons](./img/redo_tau_0_0_dormant_fraction.png) | ![Dormant neurons](./img/redo_tau_0_1_dormant_fraction.png)
 
 I've skipped running 10M or 100M experiments because these are very expensive in terms of compute.
 
