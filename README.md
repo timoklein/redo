@@ -33,9 +33,18 @@ In particular:
 - Fewer random samples before learing starts.
 - $\tau=0.1$ instead of $\tau=0.025$.
 
-Episodic Return            | Dormant count $\tau=0.0$ | Dormant count $\tau=0.1$ |
-:-------------------------:|:-------------------------:|:-------------------------:|
-![Reward](./img/redo_episodic_returns.png ) |  ![Dormant neurons](./img/redo_tau_0_0_dormant_fraction.png) | ![Dormant neurons](./img/redo_tau_0_1_dormant_fraction.png)
+#### Episodic Return
+
+<img src="./img/redo_episodic_returns.png" width="300">
+
+#### Dormant count $\tau=0.0$
+
+<img src="./img/redo_tau_0_0_dormant_fraction.png" width="300">
+
+#### Dormant count $\tau=0.1$
+
+<img src="./img/redo_tau_0_1_dormant_fraction.png" width="300">
+
 
 I've skipped running 10M or 100M experiments because these are very expensive in terms of compute.
 
