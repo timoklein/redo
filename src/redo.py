@@ -23,15 +23,15 @@ def _kaiming_uniform_reinit(layer: nn.Linear | nn.Conv2d, mask: torch.Tensor) ->
     layer.weight.data[mask, ...] = torch.empty_like(layer.weight.data[mask, ...]).uniform_(-bound, bound)
 
     if layer.bias is not None:
-        # NOTE: The original code resets the bias to 0.0
-        layer.bias.data[mask] = 0.0
-        # if isinstance(layer, nn.Conv2d):
-        #     if fan_in != 0:
-        #         bound = 1 / math.sqrt(fan_in)
-        #         layer.bias.data[mask, ...] = torch.empty_like(layer.bias.data[mask, ...]).uniform_(-bound, bound)
-        # else:
-        #     bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
-        #     layer.bias.data[mask, ...] = torch.empty_like(layer.bias.data[mask, ...]).uniform_(-bound, bound)
+        # The original code resets the bias to 0.0 because it uses a different initialization scheme
+        # layer.bias.data[mask] = 0.0
+        if isinstance(layer, nn.Conv2d):
+            if fan_in != 0:
+                bound = 1 / math.sqrt(fan_in)
+                layer.bias.data[mask, ...] = torch.empty_like(layer.bias.data[mask, ...]).uniform_(-bound, bound)
+        else:
+            bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
+            layer.bias.data[mask, ...] = torch.empty_like(layer.bias.data[mask, ...]).uniform_(-bound, bound)
 
 
 @torch.no_grad()
@@ -109,6 +109,7 @@ def _reset_dormant_neurons(model: QNetwork, redo_masks: torch.Tensor, use_lecun_
         mask = redo_masks[i]
         layer = layers[i][1]
         next_layer = layers[i + 1][1]
+        # Can be used to not reset outgoing weights in the Q-function
         next_layer_name = layers[i + 1][0]
 
         # Skip if there are no dead neurons
@@ -125,7 +126,7 @@ def _reset_dormant_neurons(model: QNetwork, redo_masks: torch.Tensor, use_lecun_
 
         # 2. Reset the outgoing weights to 0
         # NOTE: Don't reset the bias for the following layer or else you will create new dormant neurons
-        # and not next_layer_name == 'q'
+        # To not reset in the last layer: and not next_layer_name == 'q'
         if isinstance(layer, nn.Conv2d) and isinstance(next_layer, nn.Linear):
             # Special case: Transition from conv to linear layer
             # Reset the outgoing weights to 0 with a mask created from the conv filters
@@ -147,10 +148,10 @@ def _reset_adam_moments(optimizer: optim.Adam, reset_masks: dict[str, torch.Tens
     assert isinstance(optimizer, optim.Adam), "Moment resetting currently only supported for Adam optimizer"
     for i, mask in enumerate(reset_masks):
         # Reset the moments for the weights
-        # NOTE: I don't think it's possible to just reset the step for moment that's being reset
-        # NOTE: Step count resets are key to the algorithm's performance
         optimizer.state_dict()["state"][i * 2]["exp_avg"][mask, ...] = 0.0
         optimizer.state_dict()["state"][i * 2]["exp_avg_sq"][mask, ...] = 0.0
+        # NOTE: Step count resets are key to the algorithm's performance
+        # It's possible to just reset the step for moment that's being reset
         optimizer.state_dict()["state"][i * 2]["step"].zero_()
 
         # Reset the moments for the bias
