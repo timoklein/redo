@@ -180,9 +180,9 @@ def _reset_adam_moments(optimizer: optim.Adam, reset_masks: dict[str, torch.Tens
     return optimizer
 
 
-@torch.no_grad()
+@torch.inference_mode()
 def run_redo(
-    batch: ReplayBufferSamples,
+    obs: torch.Tensor,
     model: QNetwork,
     optimizer: optim.Adam,
     tau: float,
@@ -197,49 +197,45 @@ def run_redo(
     Returns the number of dormant neurons.
     """
 
-    with torch.inference_mode():
-        obs = batch.observations
-        activations = {}
-        activation_getter = partial(_get_activation, activations=activations)
+    activations = {}
+    activation_getter = partial(_get_activation, activations=activations)
 
-        # Register hooks for all Conv2d and Linear layers to calculate activations
-        handles = []
-        for name, module in model.named_modules():
-            if isinstance(module, torch.nn.Conv2d) or isinstance(module, torch.nn.Linear):
-                handles.append(module.register_forward_hook(activation_getter(name)))
+    # Register hooks for all Conv2d and Linear layers to calculate activations
+    handles = []
+    for name, module in model.named_modules():
+        if isinstance(module, torch.nn.Conv2d) or isinstance(module, torch.nn.Linear):
+            handles.append(module.register_forward_hook(activation_getter(name)))
 
-        # Calculate activations
-        _ = model(obs)
+    # Calculate activations
+    _ = model(obs)
 
-        # Masks for tau=0 logging
-        zero_masks = _get_redo_masks(activations, 0.0)
-        total_neurons = sum([torch.numel(mask) for mask in zero_masks])
-        zero_count = sum([torch.sum(mask) for mask in zero_masks])
-        zero_fraction = (zero_count / total_neurons) * 100
+    # Masks for tau=0 logging
+    zero_masks = _get_redo_masks(activations, 0.0)
+    total_neurons = sum([torch.numel(mask) for mask in zero_masks])
+    zero_count = sum([torch.sum(mask) for mask in zero_masks])
+    zero_fraction = (zero_count / total_neurons) * 100
 
-        # Calculate the masks actually used for resetting
-        masks = _get_redo_masks(activations, tau)
-        dormant_count = sum([torch.sum(mask) for mask in masks])
-        dormant_fraction = (dormant_count / sum([torch.numel(mask) for mask in masks])) * 100
+    # Calculate the masks actually used for resetting
+    masks = _get_redo_masks(activations, tau)
+    dormant_count = sum([torch.sum(mask) for mask in masks])
+    dormant_fraction = (dormant_count / sum([torch.numel(mask) for mask in masks])) * 100
 
-        # Re-initialize the dormant neurons and reset the Adam moments
-        if re_initialize:
-            print("Re-initializing dormant neurons")
-            print(
-                f"Total neurons: {total_neurons} | Dormant neurons: {dormant_count} | Dormant fraction: {dormant_fraction:.2f}%"
-            )
-            model = _reset_dormant_neurons(model, masks, use_lecun_init)
-            optimizer = _reset_adam_moments(optimizer, masks)
+    # Re-initialize the dormant neurons and reset the Adam moments
+    if re_initialize:
+        print("Re-initializing dormant neurons")
+        print(f"Total neurons: {total_neurons} | Dormant neurons: {dormant_count} | Dormant fraction: {dormant_fraction:.2f}%")
+        model = _reset_dormant_neurons(model, masks, use_lecun_init)
+        optimizer = _reset_adam_moments(optimizer, masks)
 
-        # Remove the hooks again
-        for handle in handles:
-            handle.remove()
+    # Remove the hooks again
+    for handle in handles:
+        handle.remove()
 
-        return {
-            "model": model,
-            "optimizer": optimizer,
-            "zero_fraction": zero_fraction,
-            "zero_count": zero_count,
-            "dormant_fraction": dormant_fraction,
-            "dormant_count": dormant_count,
-        }
+    return {
+        "model": model,
+        "optimizer": optimizer,
+        "zero_fraction": zero_fraction,
+        "zero_count": zero_count,
+        "dormant_fraction": dormant_fraction,
+        "dormant_count": dormant_count,
+    }

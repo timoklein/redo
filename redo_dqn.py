@@ -170,7 +170,7 @@ def main(cfg: Config) -> None:
             if global_step % cfg.redo_check_interval == 0:
                 redo_samples = rb.sample(cfg.redo_bs)
                 redo_out = run_redo(
-                    redo_samples,
+                    redo_samples.observations,
                     model=q_network,
                     optimizer=optimizer,
                     tau=cfg.redo_tau,
