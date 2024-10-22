@@ -25,7 +25,7 @@ Every $F$-th time step:
 
 ## Results
 
-These results were generated using 3 seeds. Note I was not using typical hyperparameters for DQN, but instead chose a hyperparameter set to exaggerate the dormant neuron phenomenon.  
+These results were generated using 3 seeds on DemonAttack-v4. Note I was not using typical hyperparameters for DQN, but instead chose a hyperparameter set to exaggerate the dormant neuron phenomenon.  
 In particular:
 
 - Updates are done every environment step instead of every 4 steps.
